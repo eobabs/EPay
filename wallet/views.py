@@ -11,7 +11,7 @@ from rest_framework.response import responses, Response
 from django.shortcuts import render, get_object_or_404
 import requests
 from .models import Transaction, Wallet
-from .serializers import FundSerializer, TransferSerializer
+from .serializers import FundSerializer, TransferSerializer, WithdrawSerializer
 
 
 # Create your views here.
@@ -57,14 +57,19 @@ def fund_wallet(request):
         "email": email,
         "callback_url": "http://localhost:8000/wallet/fund/verify",
     }
+    return __check_status(data, headers, url)
+
+
+def __check_status(data, headers, url):
     try:
         response_str = requests.post(url=url, json=data, headers=headers)
         response = response_str.json()
         if response['status']:
             return Response(data=response['data'], status=status.HTTP_200_OK)
-        return Response({"message": "Unable to initialize transaction"}, status=status.HTTP_400_BAD_REQUEST) #None
+        return Response({"message": "Unable to initialize transaction"}, status=status.HTTP_400_BAD_REQUEST)  # None
     except requests.exceptions.RequestException as e:
         return Response({"message": f"Unable to complete transaction. {e}"}, status=status.HTTP_302_FOUND)
+
 
 @api_view()
 def verify_fund(request):
@@ -102,7 +107,7 @@ def verify_fund(request):
             from_email=from_email
         )
 
-        return Response({"message": "Deposit successful"}, status=status.HTTP_200_OK)
+        return Response({"message": f"{amount} deposited successfully"}, status=status.HTTP_200_OK)
     return Response({"message": "Transaction not successful"}, status=status.HTTP_404_NOT_FOUND)
 
 
@@ -168,5 +173,79 @@ def transfer(request):
             message=message,
             from_email=from_email
         )
-        return Response({"message": "Transfer successful"}, status=status.HTTP_200_OK)
+        return Response({"message": f"{amount} transferred successfully"}, status=status.HTTP_200_OK)
+
+@permission_classes([IsAuthenticated])
+@api_view(['POST'])
+def withdraw(request):
+    data=WithdrawSerializer(data=request.data)
+    data.is_valid(raise_exception=True)
+
+    amount = data.validated_data['amount']
+    amount *= 100
+
+    user = request.user
+    email = user.email
+    wallet = get_object_or_404(Wallet, user=user)
+    reference = f"ref_{uuid4().hex}"
+
+    if wallet.balance < amount:
+        return Response({"message": "Insufficient funds"}, status=status.HTTP_400_BAD_REQUEST)
+
+    Transaction.objects.create(
+        amount=(amount/100),
+        reference=reference,
+        sender=user,
+        transaction_type="W",
+    )
+    url = 'https://api.paystack.co/transaction/initialize'
+    secret = settings.PAYSTACK_SECRET_KEY
+    headers = {
+        "Authorization": f"Bearer {secret}",
+    }
+    data = {
+        "amount": amount,
+        "reference": reference,
+        "email": email,
+        "callback_url": "http://localhost:8000/wallet/fund/verify_withdraw",
+    }
+    return __check_status(data, headers, url)
+
+@api_view()
+def verify_withdraw(request):
+    reference = request.GET.get('reference')
+    secret = settings.PAYSTACK_SECRET_KEY
+    headers = {
+        "Authorization": f"Bearer {secret}",
+    }
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    response_str = requests.get(url=url, headers=headers)
+    response = response_str.json()
+    if response['status'] and response['data']['status'] == "success":
+        amount = (response['data']['amount'] / 100)
+        try:
+            transaction = Transaction.objects.get(reference=reference, verified=False)
+        except Transaction.DoesNotExist:
+            return Response({"message": "Transaction does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        wallet = get_object_or_404(Wallet, user=transaction.sender)
+        wallet.withdraw(Decimal(amount))
+        transaction.verified = True
+        transaction.save()
+
+        subject = "Wallet System Transaction Alert"
+        message = f"""Withdrawal transaction occurred on your wallet
+        You have withdrawn: {amount}
+        *****thank you for using Wallet System***"""
+        from_email = settings.EMAIL_HOST_USER
+        recipient_email = transaction.sender.email
+
+        send_mail(
+            subject=subject,
+            recipient_list=[recipient_email],
+            message=message,
+            from_email=from_email
+        )
+
+        return Response({"message": f"{amount} withdrawn successfully"}, status=status.HTTP_200_OK)
+    return Response({"message": "Transaction not successful"}, status=status.HTTP_404_NOT_FOUND)
 
