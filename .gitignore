@@ -1,0 +1,7 @@
+.env
+.idea
+Pipfile.lock
+db.sqlite3
+wallet.sqlite
+/media
+/wallet/templates
