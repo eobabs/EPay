@@ -249,3 +249,56 @@ def verify_withdraw(request):
         return Response({"message": f"{amount} withdrawn successfully"}, status=status.HTTP_200_OK)
     return Response({"message": "Transaction not successful"}, status=status.HTTP_404_NOT_FOUND)
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_transaction_limits(request):
+    """Get transaction limits based on verification status"""
+    user = request.user
+
+    # Default limits for unverified users
+    limits = {
+        "daily_transfer_limit": 20000,
+        "single_transfer_limit": 5000,
+        "daily_withdrawal_limit": 10000,
+        "single_withdrawal_limit": 5000,
+        "verification_status": "unverified"
+    }
+
+    # Check if user is email verified
+    if user.is_verified:
+        limits.update({
+            "daily_transfer_limit": 50000,
+            "single_transfer_limit": 20000,
+            "daily_withdrawal_limit": 30000,
+            "single_withdrawal_limit": 15000,
+            "verification_status": "email_verified"
+        })
+
+    # Check if user has profile
+    try:
+        profile = user.profile
+
+        # Check ID verification
+        if profile.id_verification_status == 'verified':
+            limits.update({
+                "daily_transfer_limit": 200000,
+                "single_transfer_limit": 50000,
+                "daily_withdrawal_limit": 100000,
+                "single_withdrawal_limit": 50000,
+                "verification_status": "id_verified"
+            })
+
+        # Check address verification
+        if profile.id_verification_status == 'verified' and profile.address_verification_status == 'verified':
+            limits.update({
+                "daily_transfer_limit": 1000000,
+                "single_transfer_limit": 500000,
+                "daily_withdrawal_limit": 500000,
+                "single_withdrawal_limit": 250000,
+                "verification_status": "fully_verified"
+            })
+    except:
+        pass
+
+    return Response(limits, status=status.HTTP_200_OK)

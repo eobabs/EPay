@@ -41,6 +41,20 @@ class TransactionSerializer(serializers.ModelSerializer):
             'transaction_time',
         ]
 
+
+class VerificationCodeSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6, min_length=6)
+
+
+class DocumentUploadSerializer(serializers.Serializer):
+    id_document = serializers.FileField(required=False)
+    address_document = serializers.FileField(required=False)
+
+
+class VerificationStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id_verification_status', 'address_verification_status']
 #
 #
 # class DashBoardSerializer(serializers.ModelSerializer):

@@ -10,5 +10,7 @@ urlpatterns = [
 
     path('fund/verify_withdraw', views.verify_withdraw, name='verify_withdraw'),
     path('fund/transfer', views.transfer, name='transfer'),
-    path('fund/withdraw', views.withdraw, name='withdraw')
+    path('fund/withdraw', views.withdraw, name='withdraw'),
+
+path('limits/', views.get_transaction_limits, name='transaction_limits'),
 ]
