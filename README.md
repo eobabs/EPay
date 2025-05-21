@@ -20,9 +20,9 @@ A secure and user-friendly wallet application that allows users to manage their 
 
 - Retrieve a history of recent transactions.
 
-4. Dashboard API:
+4. Dashboard :
 
-- Dashboard summarizing balance, personal info, and recent transactions.
+- Summarizes balance, personal info, and recent transactions.
 
 
 # Tech Stack
